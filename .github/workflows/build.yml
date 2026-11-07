@@ -10,6 +10,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Find project (unzip if needed)
+        run: |
+          shopt -s nullglob
+          zips=( *.zip )
+          if [ ${#zips[@]} -gt 0 ]; then
+            echo "Unzipping ${zips[0]}"
+            rm -rf build_src && mkdir build_src
+            unzip -q -o "${zips[0]}" -d build_src
+            SEARCH=build_src
+          else
+            echo "No zip found, using repository files"
+            SEARCH=.
+          fi
+          SETTINGS=$(find "$SEARCH" -name settings.gradle.kts -not -path '*/build/*' | head -n 1)
+          if [ -z "$SETTINGS" ]; then
+            echo "ERROR: settings.gradle.kts not found. Upload SlateLauncher.zip to the repo root."
+            exit 1
+          fi
+          PROJ=$(dirname "$SETTINGS")
+          echo "Project folder: $PROJ"
+          echo "PROJ=$PROJ" >> "$GITHUB_ENV"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -20,9 +42,10 @@ jobs:
           gradle-version: "8.7"
 
       - name: Build debug APK
+        working-directory: ${{ env.PROJ }}
         run: gradle assembleDebug --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
           name: SlateLauncher-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: ${{ env.PROJ }}/app/build/outputs/apk/debug/*.apk
